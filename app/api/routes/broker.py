@@ -24,6 +24,39 @@ _PROVISIONING_URL = (
 )
 
 
+def _metaapi_account_missing(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "not found" in msg or "404" in msg
+
+
+async def _clear_stale_broker(user: User, db: AsyncSession) -> None:
+    """MetaAPI account gone but DB still marked connected — reset so user can reconnect."""
+    from app.core.engine import engines
+
+    if user.id in engines:
+        await engines[user.id].stop()
+        del engines[user.id]
+
+    user.broker_connected = False
+    user.meta_api_account_id = None
+    user.mt5_password_encrypted = None
+    user.broker_connected_at = None
+    await db.commit()
+    logger.warning(f"Cleared stale broker connection for user {user.id}")
+
+
+async def _metaapi_account_exists(account_id: str) -> bool:
+    try:
+        from metaapi_cloud_sdk import MetaApi
+        api = MetaApi(settings.META_API_TOKEN)
+        await api.metatrader_account_api.get_account(account_id)
+        return True
+    except Exception as exc:
+        if _metaapi_account_missing(exc):
+            return False
+        raise
+
+
 @router.post("/connect", response_model=BrokerStatusOut)
 async def connect_broker(
     body: BrokerConnectIn,
@@ -31,7 +64,9 @@ async def connect_broker(
     db: AsyncSession = Depends(get_db),
 ):
     if user.broker_connected and user.meta_api_account_id:
-        raise HTTPException(status_code=409, detail="Broker already connected. Disconnect first.")
+        if await _metaapi_account_exists(user.meta_api_account_id):
+            raise HTTPException(status_code=409, detail="Broker already connected. Disconnect first.")
+        await _clear_stale_broker(user, db)
 
     logger.info(f"Provisioning MetaAPI account for user {user.id} | server={body.mt5_server}")
 
@@ -122,6 +157,7 @@ async def disconnect_broker(
 @router.get("/status", response_model=BrokerStatusOut)
 async def broker_status(
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     if not user.broker_connected or not user.meta_api_account_id:
         return BrokerStatusOut(connected=False)
@@ -145,4 +181,6 @@ async def broker_status(
         )
     except Exception as exc:
         logger.error(f"Broker status check failed for user {user.id}: {exc}")
+        if _metaapi_account_missing(exc):
+            await _clear_stale_broker(user, db)
         return BrokerStatusOut(connected=False, mt5_login=user.mt5_login, mt5_server=user.mt5_server)

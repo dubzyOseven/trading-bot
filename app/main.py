@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from app.api.routes import auth, bot, broker, config, trades
+from app.api.routes import auth, bot, broker, config, dashboard, market, trades
 from app.core.config import settings
 from app.db.database import init_db
 
@@ -17,10 +17,15 @@ async def lifespan(app: FastAPI):
     import app.models.trade  # noqa: F401
     await init_db()
     yield
+    from app.core.chart_stream import chart_streams
+    from app.core.dashboard_stream import dashboard_streams
     from app.core.engine import engines
+
     for engine in list(engines.values()):
         if engine.state.running:
             await engine.stop()
+    await chart_streams.shutdown()
+    await dashboard_streams.shutdown()
     logger.info("Shutdown complete.")
 
 
@@ -46,6 +51,8 @@ app.include_router(broker.router, prefix=API_PREFIX)
 app.include_router(bot.router, prefix=API_PREFIX)
 app.include_router(trades.router, prefix=API_PREFIX)
 app.include_router(config.router, prefix=API_PREFIX)
+app.include_router(market.router, prefix=API_PREFIX)
+app.include_router(dashboard.router, prefix=API_PREFIX)
 
 
 @app.get("/health", tags=["Health"])

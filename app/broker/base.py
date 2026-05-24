@@ -47,8 +47,9 @@ class PlacedOrder:
     order_type: OrderType
     volume: float
     price: float
-    stop_loss: Optional[float]
-    take_profit: Optional[float]
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    position_id: Optional[str] = None
 
 
 class BrokerBase(ABC):
@@ -98,5 +99,7 @@ class BrokerBase(ABC):
         """Return the actual fill price for a placed order, or None if unavailable."""
 
     @abstractmethod
-    async def get_deal_result(self, order_id: str) -> Optional[dict]:
+    async def get_deal_result(
+        self, order_id: str, position_id: Optional[str] = None
+    ) -> Optional[dict]:
         """Return {'close_price': float, 'profit': float} for a closed trade, or None."""

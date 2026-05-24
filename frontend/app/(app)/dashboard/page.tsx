@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
-import { api, BotStatus, AccountInfo, Position } from "@/lib/api";
+import { api } from "@/lib/api";
+import { useDashboardStream } from "@/providers/DashboardStreamProvider";
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -16,39 +17,31 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [botStatus, setBotStatus] = useState<BotStatus | null>(null);
-  const [account, setAccount] = useState<AccountInfo | null>(null);
-  const [positions, setPositions] = useState<Position[]>([]);
+  const {
+    account,
+    positions,
+    botStatus,
+    live,
+    error,
+    brokerConnected,
+    setError,
+  } = useDashboardStream();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const refresh = useCallback(async () => {
-    try {
-      const [s, a, p] = await Promise.all([api.botStatus(), api.account(), api.positions()]);
-      setBotStatus(s); setAccount(a); setPositions(p);
-    } catch (err: any) {
-      if (err.message.includes("401") || err.message.includes("authenticated")) {
-        router.push("/login");
-      }
-    }
-  }, [router]);
 
   useEffect(() => {
-    if (!localStorage.getItem("token")) { router.push("/login"); return; }
-    refresh();
-    const t = setInterval(refresh, 10000);
-    return () => clearInterval(t);
-  }, [refresh, router]);
+    if (!localStorage.getItem("token")) router.push("/login");
+  }, [router]);
 
   async function toggleBot() {
-    setError(""); setLoading(true);
+    setError("");
+    setLoading(true);
     try {
       if (botStatus?.running) await api.botStop();
       else await api.botStart();
-      await refresh();
-    } catch (err: any) {
-      if (err.message.includes("broker")) router.push("/connect");
-      else setError(err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Request failed";
+      if (msg.includes("broker")) router.push("/connect");
+      else setError(msg);
     } finally {
       setLoading(false);
     }
@@ -61,18 +54,29 @@ export default function DashboardPage() {
       <Navbar />
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 
-        {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Dashboard</h1>
-            <p className="text-gray-400 text-sm mt-0.5">
-              {botStatus?.last_tick
-                ? `Last tick: ${new Date(botStatus.last_tick).toLocaleTimeString()}`
-                : "Bot not started"}
-            </p>
+          <div className="flex items-center gap-3">
+            <div>
+              <h1 className="text-2xl font-bold">Dashboard</h1>
+              <p className="text-gray-400 text-sm mt-0.5">
+                {botStatus?.last_tick
+                  ? `Last tick: ${new Date(botStatus.last_tick).toLocaleTimeString()}`
+                  : "Bot not started"}
+              </p>
+            </div>
+            {live && (
+              <span className="flex items-center gap-1.5 text-xs text-success font-medium">
+                <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                Live
+              </span>
+            )}
+            {!live && account && (
+              <span className="text-xs text-gray-500">Reconnecting…</span>
+            )}
           </div>
           <button
-            onClick={toggleBot} disabled={loading}
+            onClick={toggleBot}
+            disabled={loading || brokerConnected === false}
             className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all disabled:opacity-60 ${
               isRunning
                 ? "bg-red-600 hover:bg-red-700 text-white"
@@ -85,7 +89,6 @@ export default function DashboardPage() {
 
         {error && <p className="text-danger text-sm bg-red-950/50 rounded-lg px-4 py-2">{error}</p>}
 
-        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard label="Balance" value={account ? `${account.currency} ${account.balance.toLocaleString()}` : "—"} />
           <StatCard label="Equity" value={account ? `${account.currency} ${account.equity.toLocaleString()}` : "—"} />
@@ -93,7 +96,6 @@ export default function DashboardPage() {
           <StatCard label="Trades Placed" value={String(botStatus?.trades_placed ?? 0)} sub="this session" />
         </div>
 
-        {/* Status badge */}
         <div className="flex items-center gap-3">
           <span className={`w-2.5 h-2.5 rounded-full ${isRunning ? "bg-success animate-pulse" : "bg-gray-600"}`} />
           <span className="text-sm text-gray-300">{isRunning ? "Bot is running" : "Bot is stopped"}</span>
@@ -104,7 +106,6 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Errors */}
         {(botStatus?.recent_errors?.length ?? 0) > 0 && (
           <div className="bg-red-950/30 border border-red-900 rounded-2xl p-5">
             <p className="text-sm font-semibold text-danger mb-2">Recent Errors</p>
@@ -114,7 +115,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Open Positions */}
         <div>
           <h2 className="text-lg font-semibold mb-3">Open Positions</h2>
           {positions.length === 0 ? (

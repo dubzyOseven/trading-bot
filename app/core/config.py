@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     ENCRYPTION_KEY: str = ""
 
     # Trading defaults
-    DEFAULT_SYMBOL: str = "EURUSD"
-    DEFAULT_TIMEFRAME: str = "1h"
+    DEFAULT_SYMBOL: str = "XAUUSD"
+    DEFAULT_TIMEFRAME: str = "1m"
     DEFAULT_RISK_PERCENT: float = 1.0
     DEFAULT_MAX_OPEN_TRADES: int = 3
     DEFAULT_ATR_MULTIPLIER_SL: float = 1.5

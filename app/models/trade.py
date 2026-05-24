@@ -20,6 +20,7 @@ class Trade(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
     order_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    position_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
 
     user: Mapped["User"] = relationship("User", back_populates="trades", lazy="noload")
     symbol: Mapped[str] = mapped_column(String(16), index=True)

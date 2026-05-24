@@ -75,8 +75,8 @@ class TradeOut(BaseModel):
 # ── Bot config schemas ────────────────────────────────────────────────────────
 
 class BotConfigIn(BaseModel):
-    symbol: str = Field(default="EURUSD", examples=["EURUSD", "GBPUSD"])
-    timeframe: str = Field(default="1h", examples=["1m", "5m", "15m", "1h", "4h", "1d"])
+    symbol: str = Field(default="XAUUSD", examples=["XAUUSD", "EURUSD", "GBPUSD"])
+    timeframe: str = Field(default="1m", examples=["1m", "5m", "15m", "1h", "4h", "1d"])
     strategy_name: str = Field(
         default="ema_crossover",
         examples=["ema_crossover", "rsi_oscillator", "macd"],
@@ -129,3 +129,18 @@ class AccountOut(BaseModel):
     margin: float
     free_margin: float
     currency: str
+
+
+# ── Market schemas ────────────────────────────────────────────────────────────
+
+class CandleOut(BaseModel):
+    time: int
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
+class SymbolsOut(BaseModel):
+    symbols: list[str]

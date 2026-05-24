@@ -46,7 +46,10 @@ async def get_history(
     if symbol:
         query = query.where(Trade.symbol == symbol.upper())
     if status:
-        query = query.where(Trade.status == status.upper())
+        try:
+            query = query.where(Trade.status == TradeStatus(status.upper()))
+        except ValueError:
+            return []
     result = await db.execute(query)
     return result.scalars().all()
 

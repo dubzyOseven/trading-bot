@@ -53,9 +53,32 @@ class MetaApiConnector(BrokerBase):
     async def disconnect(self) -> None:
         if self._connection:
             await self._connection.close()
+            self._connection = None
             logger.info("MetaAPI connection closed.")
 
+    def _rpc_closed(self) -> bool:
+        if self._connection is None:
+            return True
+        return bool(getattr(self._connection, "_closed", False))
+
+    async def _ensure_rpc(self) -> None:
+        if not self._rpc_closed():
+            return
+        logger.info(f"MetaAPI RPC reconnecting (account={self._account_id})…")
+        if self._account is None:
+            await self.connect()
+            return
+        self._connection = self._account.get_rpc_connection()
+        await self._connection.connect()
+        await self._connection.wait_synchronized()
+
+    async def get_symbols(self) -> list[str]:
+        await self._ensure_rpc()
+        symbols = await self._connection.get_symbols()
+        return sorted(s.upper() for s in symbols)
+
     async def get_account_info(self) -> AccountInfo:
+        await self._ensure_rpc()
         info = await self._connection.get_account_information()
         return AccountInfo(
             balance=info["balance"],
@@ -90,6 +113,7 @@ class MetaApiConnector(BrokerBase):
         return df
 
     async def get_positions(self) -> list[Position]:
+        await self._ensure_rpc()
         raw = await self._connection.get_positions()
         result = []
         for p in raw:
@@ -124,6 +148,7 @@ class MetaApiConnector(BrokerBase):
         tp = float(take_profit) if take_profit is not None else None
         vol = float(volume)
 
+        await self._ensure_rpc()
         if order_type == OrderType.BUY:
             result = await self._connection.create_market_buy_order(
                 symbol, vol, sl, tp, options
@@ -133,9 +158,15 @@ class MetaApiConnector(BrokerBase):
                 symbol, vol, sl, tp, options
             )
 
-        logger.info(f"Order placed: {order_type} {volume} {symbol} → id={result.get('orderId')}")
+        order_id = str(result.get("orderId") or result.get("positionId") or "")
+        position_id = str(result.get("positionId") or "") or None
+        logger.info(
+            f"Order placed: {order_type} {volume} {symbol} → "
+            f"orderId={result.get('orderId')} positionId={result.get('positionId')}"
+        )
         return PlacedOrder(
-            order_id=str(result.get("orderId", "")),
+            order_id=order_id,
+            position_id=position_id,
             symbol=symbol,
             order_type=order_type,
             volume=volume,
@@ -146,6 +177,7 @@ class MetaApiConnector(BrokerBase):
 
     async def close_position(self, position_id: str) -> bool:
         try:
+            await self._ensure_rpc()
             await self._connection.close_position(position_id)
             logger.info(f"Position {position_id} closed.")
             return True
@@ -156,6 +188,7 @@ class MetaApiConnector(BrokerBase):
     async def get_fill_price(self, order_id: str) -> Optional[float]:
         """Fetch the actual fill price from MetaAPI history orders."""
         try:
+            await self._ensure_rpc()
             orders = await self._connection.get_history_orders_by_ticket(order_id)
             for o in orders:
                 price = o.get("openPrice") or o.get("currentPrice")
@@ -165,10 +198,16 @@ class MetaApiConnector(BrokerBase):
             logger.debug(f"Could not fetch fill price for order {order_id}: {exc}")
         return None
 
-    async def get_deal_result(self, order_id: str) -> Optional[dict]:
+    async def get_deal_result(
+        self, order_id: str, position_id: Optional[str] = None
+    ) -> Optional[dict]:
         """Fetch close price and profit from MetaAPI deals for a closed trade."""
         try:
-            deals = await self._connection.get_deals_by_ticket(order_id)
+            await self._ensure_rpc()
+            if position_id:
+                deals = await self._connection.get_deals_by_position(position_id)
+            else:
+                deals = await self._connection.get_deals_by_ticket(order_id)
             # Deals are ordered oldest first; the last deal is the close deal
             for deal in reversed(deals):
                 deal_type = deal.get("type", "")

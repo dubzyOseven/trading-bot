@@ -29,8 +29,8 @@ _TF_SECONDS: dict[str, int] = {
 
 @dataclass
 class BotConfig:
-    symbol: str = "EURUSD"
-    timeframe: str = "1h"
+    symbol: str = "XAUUSD"
+    timeframe: str = "1m"
     strategy_name: str = "ema_crossover"   # ema_crossover | rsi_oscillator | macd
     risk_percent: float = 1.0
     max_open_trades: int = 3

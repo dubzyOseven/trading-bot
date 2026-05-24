@@ -52,7 +52,7 @@ function Field({
 export default function ConfigPage() {
   const router = useRouter();
   const [cfg, setCfg] = useState<BotConfig>({
-    symbol: "EURUSD", timeframe: "1h", strategy_name: "ema_crossover",
+    symbol: "XAUUSD", timeframe: "1m", strategy_name: "ema_crossover",
     risk_percent: 1.0, max_open_trades: 3, atr_multiplier_sl: 1.5,
     atr_multiplier_tp: 2.5, ema_fast: 9, ema_slow: 21, rsi_period: 14,
     rsi_overbought: 70, rsi_oversold: 30,

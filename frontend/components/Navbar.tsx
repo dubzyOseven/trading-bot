@@ -1,9 +1,12 @@
 "use client";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
+import { clearStreamCache } from "@/lib/streamCache";
+import { useDashboardStreamOptional } from "@/providers/DashboardStreamProvider";
 
 const links = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/charts", label: "Charts" },
   { href: "/trades", label: "Trades" },
   { href: "/config", label: "Config" },
   { href: "/connect", label: "Broker" },
@@ -12,8 +15,11 @@ const links = [
 export default function Navbar() {
   const router = useRouter();
   const path = usePathname();
+  const stream = useDashboardStreamOptional();
 
   function logout() {
+    stream?.disconnect();
+    clearStreamCache();
     localStorage.removeItem("token");
     router.push("/login");
   }

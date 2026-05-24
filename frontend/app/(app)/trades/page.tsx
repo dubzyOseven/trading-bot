@@ -10,12 +10,18 @@ export default function TradesPage() {
   const [filter, setFilter] = useState<"ALL" | "OPEN" | "CLOSED">("ALL");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!localStorage.getItem("token")) { router.push("/login"); return; }
+  const loadTrades = () => {
     api.history({ limit: 200 })
       .then(setTrades)
       .catch(() => {})
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (!localStorage.getItem("token")) { router.push("/login"); return; }
+    loadTrades();
+    const t = setInterval(loadTrades, 10000);
+    return () => clearInterval(t);
   }, [router]);
 
   const filtered = filter === "ALL" ? trades : trades.filter((t) => t.status === filter);

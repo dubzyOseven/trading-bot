@@ -1,5 +1,27 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+export function wsBase(): string {
+  return BASE.replace(/^http/, "ws");
+}
+
+export function marketCandlesWsUrl(symbol: string, timeframe: string): string | null {
+  const t = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  if (!t) return null;
+  const q = new URLSearchParams({
+    token: t,
+    symbol,
+    timeframe,
+  });
+  return `${wsBase()}/api/v1/ws/market/candles?${q}`;
+}
+
+export function dashboardWsUrl(): string | null {
+  const t = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  if (!t) return null;
+  const q = new URLSearchParams({ token: t });
+  return `${wsBase()}/api/v1/ws/dashboard?${q}`;
+}
+
 function token(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("token");
@@ -61,6 +83,13 @@ export const api = {
   getConfig: () => request<BotConfig>("/config"),
   updateConfig: (body: BotConfig) =>
     request<BotConfig>("/config", { method: "PUT", body: JSON.stringify(body) }),
+
+  candles: (symbol: string, timeframe: string, count?: number) =>
+    request<Candle[]>(
+      `/market/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&count=${count ?? 200}`
+    ),
+
+  symbols: () => request<{ symbols: string[] }>("/market/symbols"),
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -99,4 +128,12 @@ export interface BotConfig {
   atr_multiplier_sl: number; atr_multiplier_tp: number;
   ema_fast: number; ema_slow: number; rsi_period: number;
   rsi_overbought: number; rsi_oversold: number;
+}
+export interface Candle {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
 }
