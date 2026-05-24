@@ -195,27 +195,29 @@ export default function ChartsPage() {
   useEffect(() => {
     if (brokerConnected !== true) return;
 
-    const url = marketCandlesWsUrl(symbol, timeframe);
-    if (!url) {
-      router.push("/login");
-      return;
-    }
+    const debounce = setTimeout(() => {
+      const url = marketCandlesWsUrl(symbol, timeframe);
+      if (!url) {
+        router.push("/login");
+        return;
+      }
 
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
 
-    setError("");
-    setLive(false);
-    if (!hydratedRef.current) setLoading(true);
+      setError("");
+      setLive(false);
+      if (!hydratedRef.current) setLoading(true);
 
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
+      const ws = new WebSocket(url);
+      wsRef.current = ws;
+      let errorFromServer = false;
 
-    ws.onopen = () => setLive(true);
+      ws.onopen = () => setLive(true);
 
-    ws.onmessage = (event) => {
+      ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data) as WsMessage;
         const series = seriesRef.current;
@@ -237,6 +239,7 @@ export default function ChartsPage() {
           saveChartState(symbol, timeframe, merged);
           setLoading(false);
         } else if (msg.type === "error") {
+          errorFromServer = true;
           setError(msg.message);
           setLive(false);
           setLoading(false);
@@ -250,19 +253,24 @@ export default function ChartsPage() {
 
     ws.onerror = () => {
       setLive(false);
-      setError("Live stream failed — loading via HTTP.");
-      ws.close();
-      loadCandlesHttp();
+      if (!errorFromServer) {
+        setError("Live stream failed — loading via HTTP.");
+        loadCandlesHttp();
+      }
     };
 
     ws.onclose = () => {
       setLive(false);
       if (wsRef.current === ws) wsRef.current = null;
     };
+    }, 400);
 
     return () => {
-      ws.close();
-      if (wsRef.current === ws) wsRef.current = null;
+      clearTimeout(debounce);
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
   }, [brokerConnected, symbol, timeframe, router, loadCandlesHttp, applyCandles]);
 

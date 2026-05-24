@@ -195,6 +195,7 @@ export function DashboardStreamProvider({ children }: { children: ReactNode }) {
 
     const ws = new WebSocket(url);
     wsRef.current = ws;
+    let errorFromServer = false;
 
     ws.onopen = () => setLive(true);
 
@@ -213,6 +214,7 @@ export function DashboardStreamProvider({ children }: { children: ReactNode }) {
           setBotStatus(msg.bot_status);
           persistPartial({ bot_status: msg.bot_status });
         } else if (msg.type === "error") {
+          errorFromServer = true;
           setError(msg.message);
           setLive(false);
           ws.close();
@@ -225,9 +227,10 @@ export function DashboardStreamProvider({ children }: { children: ReactNode }) {
 
     ws.onerror = () => {
       setLive(false);
-      setError("Live stream failed — using HTTP fallback.");
-      ws.close();
-      refreshHttp();
+      if (!errorFromServer) {
+        setError("Live stream failed — using HTTP fallback.");
+        refreshHttp();
+      }
     };
 
     let retryTimer: ReturnType<typeof setTimeout> | undefined;

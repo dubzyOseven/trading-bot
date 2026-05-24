@@ -20,7 +20,7 @@ from app.core.config import settings
 VALID_TIMEFRAMES = frozenset({"1m", "5m", "15m", "30m", "1h", "4h", "1d"})
 CANDLE_INTERVAL_MS = 5000
 SNAPSHOT_COUNT = 200
-STREAM_IDLE_SEC = 60
+STREAM_IDLE_SEC = 20
 
 
 def _candle_time_unix(candle: dict) -> int:
@@ -32,15 +32,40 @@ def _candle_time_unix(candle: dict) -> int:
     return int(t)
 
 
-def meta_candle_to_out(candle: dict) -> dict[str, Any]:
+def _safe_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def meta_candle_to_out(candle: dict) -> Optional[dict[str, Any]]:
+    o = _safe_float(candle.get("open"))
+    h = _safe_float(candle.get("high"))
+    low = _safe_float(candle.get("low"))
+    c = _safe_float(candle.get("close"))
+    if o is None or h is None or low is None or c is None:
+        return None
     return {
         "time": _candle_time_unix(candle),
-        "open": float(candle["open"]),
-        "high": float(candle["high"]),
-        "low": float(candle["low"]),
-        "close": float(candle["close"]),
-        "volume": float(candle.get("tickVolume") or candle.get("volume") or 0),
+        "open": o,
+        "high": h,
+        "low": low,
+        "close": c,
+        "volume": _safe_float(candle.get("tickVolume") or candle.get("volume")) or 0.0,
     }
+
+
+def friendly_metaapi_error(exc: BaseException) -> str:
+    msg = str(exc)
+    if "subscriptions quota" in msg or "TooManyRequests" in msg:
+        return (
+            "MetaAPI live subscription limit reached (25 max). "
+            "Wait about a minute, keep one chart open, or use HTTP fallback."
+        )
+    return msg
 
 
 def dataframe_to_candles(df) -> list[dict[str, Any]]:
@@ -87,9 +112,9 @@ class ChartCandleListener(SynchronizationListener):
             sym = (raw.get("symbol") or "").upper()
             tf = raw.get("timeframe") or ""
             if sym == self._session.symbol and tf == self._session.timeframe:
-                await self._session.broadcast(
-                    {"type": "update", "candle": meta_candle_to_out(raw)}
-                )
+                out = meta_candle_to_out(raw)
+                if out is not None:
+                    await self._session.broadcast({"type": "update", "candle": out})
 
 
 class ChartStreamSession:
@@ -147,9 +172,10 @@ class ChartStreamSession:
             except Exception as exc:
                 logger.exception(f"Chart stream start failed: {exc}")
                 await self._stop_stream()
-                await self.broadcast({"type": "error", "message": str(exc)})
+                err_msg = friendly_metaapi_error(exc)
+                await self.broadcast({"type": "error", "message": err_msg})
                 await self._release_subscriber(ws)
-                raise
+                raise RuntimeError(err_msg) from exc
         else:
             await self._send_snapshot(ws)
 
@@ -188,16 +214,19 @@ class ChartStreamSession:
         self._listener = ChartCandleListener(self)
         self._streaming.add_synchronization_listener(self._listener)
 
-        await self._streaming.subscribe_to_market_data(
-            self.symbol,
-            [
-                {
-                    "type": "candles",
-                    "timeframe": self.timeframe,
-                    "intervalInMilliseconds": CANDLE_INTERVAL_MS,
-                }
-            ],
-        )
+        try:
+            await self._streaming.subscribe_to_market_data(
+                self.symbol,
+                [
+                    {
+                        "type": "candles",
+                        "timeframe": self.timeframe,
+                        "intervalInMilliseconds": CANDLE_INTERVAL_MS,
+                    }
+                ],
+            )
+        except Exception as exc:
+            raise RuntimeError(friendly_metaapi_error(exc)) from exc
 
         snapshot = await fetch_candle_snapshot(
             self.account_id, self.symbol, self.timeframe

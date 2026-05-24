@@ -14,11 +14,12 @@ from metaapi_cloud_sdk import MetaApi
 from metaapi_cloud_sdk.clients.metaapi.synchronization_listener import SynchronizationListener
 
 from app.broker.metaapi import MetaApiConnector
+from app.core.chart_stream import friendly_metaapi_error
 from app.core.config import settings
 from app.core.engine import engines
 
 BOT_STATUS_INTERVAL_S = 5
-STREAM_IDLE_SEC = 60
+STREAM_IDLE_SEC = 20
 
 
 def _account_to_dict(info: Optional[dict]) -> dict[str, Any]:
@@ -205,9 +206,10 @@ class DashboardStreamSession:
             except Exception as exc:
                 logger.exception(f"Dashboard stream start failed: {exc}")
                 await self._stop_stream()
-                await self.broadcast({"type": "error", "message": str(exc)})
+                err_msg = friendly_metaapi_error(exc)
+                await self.broadcast({"type": "error", "message": err_msg})
                 await self._release_subscriber(ws)
-                raise
+                raise RuntimeError(err_msg) from exc
         else:
             await self._send_snapshot(ws)
 
