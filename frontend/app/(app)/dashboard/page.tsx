@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
+import { BrandLogo } from "@/components/BrandLogo";
 import { api } from "@/lib/api";
 import { useDashboardStream } from "@/providers/DashboardStreamProvider";
 
@@ -54,6 +55,16 @@ export default function DashboardPage() {
       <Navbar />
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 
+        <div className="flex flex-col sm:flex-row items-center gap-6 bg-gray-900 border border-gray-800 rounded-2xl p-6">
+          <BrandLogo size="lg" showName={false} />
+          <div className="text-center sm:text-left">
+            <h2 className="text-xl font-bold text-white">MX-Trading Bot</h2>
+            <p className="text-gray-400 text-sm mt-1">
+              Powered by MX Academy — automated MT5 trading on your connected broker.
+            </p>
+          </div>
+        </div>
+
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div>
@@ -70,8 +81,10 @@ export default function DashboardPage() {
                 Live
               </span>
             )}
-            {!live && account && (
-              <span className="text-xs text-gray-500">Reconnecting…</span>
+            {!live && brokerConnected && (
+              <span className="text-xs text-gray-500">
+                {error ? "Polling via HTTP" : "Connecting…"}
+              </span>
             )}
           </div>
           <button

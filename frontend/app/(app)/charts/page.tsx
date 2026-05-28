@@ -27,6 +27,7 @@ const FALLBACK_SYMBOLS = [
   "XAUUSD", "XAGUSD",
 ];
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
+const CHART_HTTP_POLL_MS = 5000;
 
 function toBar(c: Candle) {
   return {
@@ -72,9 +73,9 @@ export default function ChartsPage() {
     if (fit) chartRef.current?.timeScale().fitContent();
   }, []);
 
-  const loadCandlesHttp = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const loadCandlesHttp = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    if (!silent) setError("");
     try {
       const data = await api.candles(symbol, timeframe);
       applyCandles(data);
@@ -88,7 +89,7 @@ export default function ChartsPage() {
       if (msg.includes("broker")) setBrokerConnected(false);
       setError(msg);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [symbol, timeframe, router, applyCandles]);
 
@@ -215,7 +216,10 @@ export default function ChartsPage() {
       wsRef.current = ws;
       let errorFromServer = false;
 
-      ws.onopen = () => setLive(true);
+      ws.onopen = () => {
+        setLive(true);
+        setError("");
+      };
 
       ws.onmessage = (event) => {
       try {
@@ -274,6 +278,16 @@ export default function ChartsPage() {
     };
   }, [brokerConnected, symbol, timeframe, router, loadCandlesHttp, applyCandles]);
 
+  useEffect(() => {
+    if (brokerConnected !== true || live) return;
+
+    const poll = () => {
+      if (!live) void loadCandlesHttp(true);
+    };
+    const interval = setInterval(poll, CHART_HTTP_POLL_MS);
+    return () => clearInterval(interval);
+  }, [brokerConnected, live, symbol, timeframe, loadCandlesHttp]);
+
   return (
     <div className="min-h-screen bg-gray-950">
       <Navbar />
@@ -289,6 +303,11 @@ export default function ChartsPage() {
             <span className="flex items-center gap-1.5 text-xs text-success font-medium">
               <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
               Live
+            </span>
+          )}
+          {!live && brokerConnected && (
+            <span className="text-xs text-gray-500">
+              {error ? "Polling via HTTP" : "Connecting…"}
             </span>
           )}
         </div>

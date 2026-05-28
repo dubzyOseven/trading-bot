@@ -154,7 +154,7 @@ export default function ConnectPage() {
             </div>
 
             <p className="text-xs text-gray-500 bg-gray-800 rounded-lg p-3">
-              By connecting, you authorise TradingBot to place trades on your behalf. Always use a demo account while testing.
+              By connecting, you authorise MX-Trading Bot to place trades on your behalf. Always use a demo account while testing.
             </p>
 
             <button

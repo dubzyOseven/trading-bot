@@ -34,6 +34,7 @@ type DashboardWsMessage =
   | { type: "error"; message: string };
 
 const WS_RETRY_MS = 30000;
+const HTTP_POLL_MS = 4000;
 
 interface DashboardStreamContextValue {
   account: AccountInfo | null;
@@ -197,7 +198,10 @@ export function DashboardStreamProvider({ children }: { children: ReactNode }) {
     wsRef.current = ws;
     let errorFromServer = false;
 
-    ws.onopen = () => setLive(true);
+    ws.onopen = () => {
+      setLive(true);
+      setError("");
+    };
 
     ws.onmessage = (event) => {
       try {
@@ -248,6 +252,18 @@ export function DashboardStreamProvider({ children }: { children: ReactNode }) {
       if (wsRef.current === ws) wsRef.current = null;
     };
   }, [brokerConnected, wsAttempt, router, refreshHttp, persistPartial]);
+
+  // Poll REST endpoints while WebSocket is down (broker must stay connected).
+  useEffect(() => {
+    if (brokerConnected !== true || !enabledRef.current || live) return;
+
+    const poll = () => {
+      if (enabledRef.current && !live) void refreshHttp();
+    };
+    poll();
+    const interval = setInterval(poll, HTTP_POLL_MS);
+    return () => clearInterval(interval);
+  }, [brokerConnected, live, refreshHttp]);
 
   return (
     <DashboardStreamContext.Provider

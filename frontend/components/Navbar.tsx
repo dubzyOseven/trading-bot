@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { clearStreamCache } from "@/lib/streamCache";
 import { useDashboardStreamOptional } from "@/providers/DashboardStreamProvider";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const links = [
   { href: "/dashboard", label: "Dashboard" },
@@ -26,7 +27,7 @@ export default function Navbar() {
 
   return (
     <nav className="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center gap-6">
-      <span className="text-brand font-bold text-lg tracking-tight">TradingBot</span>
+      <BrandLogo size="sm" href="/dashboard" />
       <div className="flex gap-4 flex-1">
         {links.map((l) => (
           <Link

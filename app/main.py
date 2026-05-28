@@ -17,15 +17,13 @@ async def lifespan(app: FastAPI):
     import app.models.trade  # noqa: F401
     await init_db()
     yield
-    from app.core.chart_stream import chart_streams
-    from app.core.dashboard_stream import dashboard_streams
+    from app.core.account_stream_hub import account_hubs
     from app.core.engine import engines
 
     for engine in list(engines.values()):
         if engine.state.running:
             await engine.stop()
-    await chart_streams.shutdown()
-    await dashboard_streams.shutdown()
+    await account_hubs.shutdown()
     logger.info("Shutdown complete.")
 
 

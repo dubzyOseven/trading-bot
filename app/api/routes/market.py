@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect, s
 from sqlalchemy import select
 
 from app.api.deps import get_connected_user
-from app.broker.metaapi import MetaApiConnector
+from app.core.account_stream_hub import account_hubs
+from app.core.broker_access import get_candles_df, get_symbols_list
 from app.core.chart_stream import VALID_TIMEFRAMES, chart_streams
 from app.core.security import decode_access_token
 from app.db.database import AsyncSessionLocal
@@ -84,12 +85,7 @@ async def ws_market_candles(
 
 @router.get("/market/symbols", response_model=SymbolsOut, summary="List tradable symbols")
 async def get_symbols(user: User = Depends(get_connected_user)):
-    connector = MetaApiConnector(user.meta_api_account_id)
-    await connector.connect()
-    try:
-        symbols = await connector.get_symbols()
-    finally:
-        await connector.disconnect()
+    symbols = await get_symbols_list(user.meta_api_account_id)
     return SymbolsOut(symbols=symbols or _DEFAULT_SYMBOLS)
 
 
@@ -101,13 +97,12 @@ async def get_candles(
     user: User = Depends(get_connected_user),
 ):
     tf = timeframe if timeframe in _VALID_TIMEFRAMES else "1h"
-    connector = MetaApiConnector(user.meta_api_account_id)
-    await connector.connect()
-    try:
-        df = await connector.get_candles(symbol.upper(), tf, count)
-    finally:
-        await connector.disconnect()
+    sym = symbol.upper()
+    cached = account_hubs.get_chart_cache(user.meta_api_account_id, sym, tf)
+    if cached:
+        return [CandleOut(**c) for c in cached[-count:]]
 
+    df = await get_candles_df(user.meta_api_account_id, sym, tf, count)
     candles: list[CandleOut] = []
     for ts, row in df.iterrows():
         candles.append(

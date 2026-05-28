@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,8 +30,10 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
       <div className="w-full max-w-md">
-        <h1 className="text-3xl font-bold text-center mb-2 text-white">TradingBot</h1>
-        <p className="text-center text-gray-400 mb-8">Sign in to your account</p>
+        <div className="flex flex-col items-center mb-8">
+          <BrandLogo size="lg" showName />
+          <p className="text-center text-gray-400 mt-4">Sign in to your account</p>
+        </div>
         <form onSubmit={handleSubmit} className="bg-gray-900 rounded-2xl p-8 space-y-5 border border-gray-800">
           {error && <p className="text-danger text-sm text-center bg-red-950/50 rounded-lg px-4 py-2">{error}</p>}
           <div>

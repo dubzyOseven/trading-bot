@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 
 from app.api.deps import get_connected_user, get_current_user
+from app.core.account_stream_hub import account_hubs, fetch_rpc_snapshot
+from app.core.broker_access import get_account_and_positions
 from app.core.engine import engines
 from app.db.database import get_db
 from app.models.schemas import AccountOut, PositionOut, TradeOut
@@ -16,9 +18,41 @@ router = APIRouter(tags=["Trades & Positions"])
 @router.get("/positions", response_model=list[PositionOut], summary="Get open positions")
 async def get_positions(user: User = Depends(get_connected_user)):
     engine = engines.get(user.id)
-    if not engine or not engine._broker:
-        return []
-    positions = await engine._broker.get_positions()
+    if engine and engine._broker:
+        positions = await engine._broker.get_positions()
+    else:
+        snap = await get_account_and_positions(user.meta_api_account_id)
+        if not snap:
+            _, positions_raw = await fetch_rpc_snapshot(user.meta_api_account_id)
+            return [
+                PositionOut(
+                    id=p["id"],
+                    symbol=p["symbol"],
+                    direction=p["direction"],
+                    volume=p["volume"],
+                    open_price=p["open_price"],
+                    current_price=p["current_price"],
+                    stop_loss=p.get("stop_loss"),
+                    take_profit=p.get("take_profit"),
+                    profit=p["profit"],
+                )
+                for p in positions_raw
+            ]
+        _, positions_raw = snap
+        return [
+            PositionOut(
+                id=p["id"],
+                symbol=p["symbol"],
+                direction=p["direction"],
+                volume=p["volume"],
+                open_price=p["open_price"],
+                current_price=p["current_price"],
+                stop_loss=p.get("stop_loss"),
+                take_profit=p.get("take_profit"),
+                profit=p["profit"],
+            )
+            for p in positions_raw
+        ]
     return [
         PositionOut(
             id=p.id, symbol=p.symbol, direction=p.order_type.value,
@@ -57,10 +91,22 @@ async def get_history(
 @router.get("/account", response_model=AccountOut, summary="Get broker account info")
 async def get_account(user: User = Depends(get_connected_user)):
     engine = engines.get(user.id)
-    if not engine or not engine._broker:
-        return AccountOut(balance=0, equity=0, margin=0, free_margin=0, currency="N/A")
-    info = await engine._broker.get_account_info()
-    return AccountOut(
-        balance=info.balance, equity=info.equity,
-        margin=info.margin, free_margin=info.free_margin, currency=info.currency,
-    )
+    if engine and engine._broker:
+        info = await engine._broker.get_account_info()
+        return AccountOut(
+            balance=info.balance,
+            equity=info.equity,
+            margin=info.margin,
+            free_margin=info.free_margin,
+            currency=info.currency,
+        )
+    snap = account_hubs.get_terminal_snapshot(user.meta_api_account_id)
+    if snap:
+        acc, _ = snap
+        return AccountOut(**acc)
+    live = await get_account_and_positions(user.meta_api_account_id)
+    if live:
+        acc, _ = live
+        return AccountOut(**acc)
+    acc, _ = await fetch_rpc_snapshot(user.meta_api_account_id)
+    return AccountOut(**acc)
