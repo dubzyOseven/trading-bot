@@ -6,6 +6,8 @@ const BRAND_NAME = "MX-Trading Bot";
 type BrandLogoProps = {
   size?: "sm" | "md" | "lg";
   showName?: boolean;
+  /** Stack brand name below the logo (auth pages) */
+  stacked?: boolean;
   href?: string;
   className?: string;
 };
@@ -19,12 +21,19 @@ const sizes = {
 export function BrandLogo({
   size = "sm",
   showName = true,
+  stacked = false,
   href,
   className = "",
 }: BrandLogoProps) {
   const s = sizes[size];
   const content = (
-    <span className={`inline-flex items-center gap-2.5 ${className}`}>
+    <span
+      className={
+        stacked
+          ? `flex flex-col items-center gap-2 ${className}`
+          : `inline-flex items-center gap-2.5 ${className}`
+      }
+    >
       <span
         className={`relative shrink-0 overflow-hidden rounded-md ${
           size === "lg" ? "shadow-md ring-1 ring-gray-700/40" : ""

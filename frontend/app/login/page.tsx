@@ -31,7 +31,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
-          <BrandLogo size="lg" showName />
+          <BrandLogo size="lg" showName stacked />
           <p className="text-center text-gray-400 mt-4">Sign in to your account</p>
         </div>
         <form onSubmit={handleSubmit} className="bg-gray-900 rounded-2xl p-8 space-y-5 border border-gray-800">
